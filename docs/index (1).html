@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uji Ulang Prediksi Inflasi LSTM</title>
+<meta name="description" content="Skripsi saya melaporkan MSE turun 55%. Saat diuji ulang tanpa memakai data uji untuk memilih model, LSTM setara dengan rata-rata 12 bulan. Uji ulang, audit lima penyebab, dan grafik interaktif.">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Uji Ulang Prediksi Inflasi LSTM: 5 Kota Indonesia">
+<meta property="og:description" content="Skripsi saya melaporkan MSE turun 55%. Saat diuji ulang dengan benar, model setara dengan menebak rata-rata 12 bulan. Ini audit lengkapnya.">
+<meta property="og:url" content="https://margoanan.github.io/inflasi-lstm-5-kota/">
+<meta property="og:image" content="https://margoanan.github.io/inflasi-lstm-5-kota/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="627">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one 680px reading column; charts and tables widen to 960px. Thesis = amber, re-test = teal, benchmark = grey. */
+:root{
+  --paper:#F3F5F7; --surface:#FFFFFF; --ink:#0B1F33; --muted:#52606D; --line:#D5DCE3;
+  --teal:#0E7C74; --amber:#B4690E; --grey:#7B8794;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0B1622; --surface:#112131; --ink:#E6EDF3; --muted:#9AA8B6; --line:#24384C;
+    --teal:#4FD1C5; --amber:#F0A54A; --grey:#8696A6; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0B1622; --surface:#112131; --ink:#E6EDF3; --muted:#9AA8B6; --line:#24384C;
+  --teal:#4FD1C5; --amber:#F0A54A; --grey:#8696A6; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:18px;line-height:1.6}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+.col{max-width:680px}
+h1,h2,h3{font-family:var(--display);line-height:1.12;text-wrap:balance;margin:0}
+h1{font-size:clamp(34px,5.4vw,58px);font-weight:700;letter-spacing:-.02em}
+h2{font-size:clamp(26px,3.4vw,34px);font-weight:700;letter-spacing:-.01em;margin-bottom:14px}
+h3{font-size:20px;font-weight:700;margin-bottom:6px}
+p{margin:0 0 14px}
+.eyebrow{font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+section{padding:56px 0;border-top:1px solid var(--line)}
+header{padding:56px 0 40px}
+.lede{font-size:21px;color:var(--ink);margin-top:18px}
+.amber{color:var(--amber)} .teal{color:var(--teal)}
+.key{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:13px;color:var(--muted)}
+.key i{display:inline-block;width:11px;height:11px;border-radius:50%}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:10px 0 4px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 18px 12px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:28px}
+.stat b{display:block;font-family:var(--display);font-size:32px;line-height:1.1}
+.stat span{font-size:15px;color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:18px 0}
+.steps .card p{font-size:16px;margin:0}
+.step-n{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.tablewrap{overflow-x:auto;margin:16px 0}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:15px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+th,td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
+th{font-family:var(--display);font-weight:700;font-size:14px;color:var(--muted);vertical-align:bottom}
+th:first-child,td:first-child{text-align:left;font-family:var(--display);font-weight:700}
+tr:last-child td{border-bottom:none}
+td.best{color:var(--teal);font-weight:600}
+td.thesis{color:var(--amber)}
+.note{font-size:15px;color:var(--muted)}
+.chart{width:100%;height:auto;display:block;overflow:visible}
+.chart text{font-family:var(--mono);font-size:12px;fill:var(--muted)}
+.chart .lbl{font-family:var(--display);font-size:14px;font-weight:700;fill:var(--ink)}
+.grid line{stroke:var(--line)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+button.tab,button.tog{font-family:var(--display);font-size:15px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;min-height:40px}
+button.tab[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+button.tog{display:inline-flex;align-items:center;gap:8px}
+button.tog i{width:18px;height:3px;border-radius:2px;display:inline-block}
+button.tog[aria-pressed="false"]{opacity:.45}
+button:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:13px;line-height:1.5;box-shadow:0 4px 14px rgba(0,0,0,.12);display:none;white-space:nowrap;z-index:3}
+.plot{position:relative}
+.finding{display:grid;grid-template-columns:56px 1fr;gap:4px 18px;padding:34px 0;border-top:1px dashed var(--line)}
+.finding:first-of-type{border-top:none}
+.finding .n{font-family:var(--display);font-size:44px;font-weight:700;line-height:1;color:var(--amber)}
+.finding .body{min-width:0}
+.timeline{display:grid;gap:10px;margin:14px 0}
+.tl{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;font-size:15px}
+.bar{display:flex;height:34px;border-radius:6px;overflow:hidden;font-family:var(--mono);font-size:12px;min-width:0}
+.bar div{display:flex;align-items:center;padding:0 10px;white-space:nowrap;overflow:hidden}
+.seg-train{background:color-mix(in srgb,var(--grey) 22%,transparent);flex:249}
+.seg-cv{background:color-mix(in srgb,var(--teal) 22%,transparent);flex:72}
+.seg-tr2{background:color-mix(in srgb,var(--grey) 22%,transparent);flex:177}
+.seg-test-bad{background:color-mix(in srgb,var(--amber) 30%,transparent);flex:0 0 172px}
+.seg-test-ok{background:color-mix(in srgb,var(--teal) 34%,transparent);flex:0 0 172px}
+ul.lessons{padding-left:20px} ul.lessons li{margin-bottom:10px}
+footer{padding:40px 0 64px;border-top:1px solid var(--line);font-size:15px;color:var(--muted)}
+footer a{color:var(--teal)}
+a{color:var(--teal)}
+@media (max-width:560px){
+  body{font-size:17px}
+  .finding{grid-template-columns:1fr}
+  .tl{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:no-preference){
+  .dot{transition:r .15s}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Studi kasus · Skripsi S.Kom. 2026 · Diuji ulang November 2026</div>
+  <h1 class="col" style="margin-top:14px">Model saya terlihat <span class="amber">55% lebih baik</span>. Setelah diuji ulang, hasilnya <span class="teal">setara dengan menebak rata-rata</span>.</h1>
+  <p class="lede col">Skripsi saya memprediksi inflasi bulanan di 5 kota besar Indonesia dengan LSTM. Setelah lulus, saya menjalankan ulang semua eksperimen dengan cara evaluasi yang lebih ketat. Halaman ini menunjukkan apa yang berubah, kenapa, dan apa yang saya pelajari.</p>
+
+  <div class="card" style="margin-top:26px">
+    <div class="eyebrow">MSE pada data uji, Okt 2020 – Des 2025 (lebih kiri = lebih akurat)</div>
+    <div class="legend">
+      <span class="key"><i style="background:var(--amber)"></i>Dilaporkan di skripsi</span>
+      <span class="key"><i style="background:var(--teal)"></i>Uji ulang, model yang sama</span>
+      <span class="key"><i style="border:2px solid var(--grey);background:transparent"></i>Tebakan "rata-rata 12 bulan terakhir"</span>
+    </div>
+    <div class="plot" id="heroPlot"></div>
+  </div>
+
+  <div class="stats">
+    <div class="card stat"><b class="num">1.560</b><span>data bulanan BPS, 5 kota, Jan 2000 – Des 2025</span></div>
+    <div class="card stat"><b class="num">3 / 5</b><span>kota di mana model final kalah dari rata-rata 12 bulan saat diuji ulang</span></div>
+    <div class="card stat"><b class="num">5</b><span>penyebab yang saya temukan saat mengaudit ulang pekerjaan saya</span></div>
+  </div>
+</header>
+
+<section id="data">
+  <div class="col">
+    <div class="eyebrow">01 · Pertanyaan dan data</div>
+    <h2>Bisakah inflasi bulan depan ditebak dari inflasi bulan-bulan sebelumnya?</h2>
+    <p>Pemerintah daerah dan Tim Pengendalian Inflasi Daerah butuh perkiraan inflasi kota untuk menyusun kebijakan. Saya memakai inflasi bulanan (month-to-month) dari BPS untuk Medan, Jakarta, Bandung, Surabaya, dan Makassar, ditambah Upah Minimum Regional (UMR) sebagai variabel pendukung.</p>
+    <p>Data dibagi berurutan: 80% awal untuk melatih model dan 20% akhir (Okt 2020 – Des 2025) untuk menguji.</p>
+  </div>
+  <div class="controls" role="group" aria-label="Pilih kota untuk grafik inflasi" id="dataTabs"></div>
+  <div class="card"><div class="plot" id="dataPlot"></div></div>
+  <p class="note col" style="margin-top:10px">Lonjakan Oktober 2005 adalah dampak kenaikan harga BBM. Periode 2000–2009 jauh lebih bergejolak dibanding periode uji, dan ini ternyata penting (lihat temuan 5).</p>
+</section>
+
+<section id="skripsi">
+  <div class="col">
+    <div class="eyebrow">02 · Yang saya lakukan di skripsi</div>
+    <h2>Tiga tahap, dan setiap tahap tampak memperbaiki hasil</h2>
+  </div>
+  <div class="steps">
+    <div class="card"><div class="step-n">Skenario 1</div><h3>Pilih baseline</h3><p>Mereplikasi 3 konfigurasi LSTM dari penelitian terdahulu. Saya memilih Leipary &amp; Setiawan (2025) karena prediksinya mengikuti naik-turun data, sementara dua lainnya hampir datar.</p></div>
+    <div class="card"><div class="step-n">Skenario 2</div><h3>Tambah UMR</h3><p>Konfigurasi baseline ditambah UMR sebagai variabel kedua (model multivariat).</p></div>
+    <div class="card"><div class="step-n">Skenario 3</div><h3>Tuning Optuna</h3><p>Mencari kombinasi scaler, lag, jumlah unit, learning rate, batch size, dan epoch terbaik untuk tiap kota.</p></div>
+  </div>
+  <div class="tablewrap"><table id="thesisTable" aria-label="MSE yang dilaporkan di skripsi"></table></div>
+  <p class="note col">Angka dari Tabel 4.5, 4.7, dan 4.9 skripsi. Di Medan, MSE turun 55% dari baseline ke model final. Inilah angka yang saya pakai di CV dan LinkedIn.</p>
+</section>
+
+<section id="uji-ulang">
+  <div class="col">
+    <div class="eyebrow">03 · Uji ulang</div>
+    <h2>Saya menjalankan ulang semuanya, kali ini tanpa mengintip data uji</h2>
+    <p>Satu notebook untuk 5 kota sekaligus, pembagian 80/20 yang sama, konfigurasi yang sama. Bedanya hanya satu aturan: <strong>data uji baru boleh disentuh sekali, di akhir</strong>. Optuna kini memilih hiperparameter dengan validasi silang 3 lipatan di dalam data latih, dan saya menambahkan empat tebakan sederhana sebagai pembanding.</p>
+  </div>
+  <div class="tablewrap"><table id="retestTable" aria-label="MSE uji ulang"></table></div>
+  <p class="note col">Angka terkecil di tiap baris ditandai; kolom skripsi tidak ikut dibandingkan karena dipilih dengan melihat data uji. LSTM + UMR sempat unggul tipis di Jakarta, Bandung, dan Makassar, tetapi tidak konsisten: versi UMR pertumbuhan dan versi yang dituning Optuna tidak mengulang hasil itu.</p>
+
+  <h3 style="margin-top:30px">Lihat sendiri prediksinya</h3>
+  <div class="controls" role="group" aria-label="Pilih kota untuk grafik prediksi" id="predTabs"></div>
+  <div class="controls" role="group" aria-label="Tampilkan atau sembunyikan garis" id="predToggles"></div>
+  <div class="card"><div class="plot" id="predPlot"></div></div>
+</section>
+
+<section id="audit">
+  <div class="col">
+    <div class="eyebrow">04 · Audit</div>
+    <h2>Lima hal yang membuat hasil skripsi terlihat lebih bagus dari kenyataannya</h2>
+  </div>
+
+  <div class="finding">
+    <div class="n">1</div>
+    <div class="body col">
+      <h3>Data uji dipakai untuk memilih model</h3>
+      <p>Di ketiga skenario, data uji ikut dipakai saat mengambil keputusan: sebagai <span class="mono">validation_data</span> dan untuk early stopping, untuk memilih lag dan units di Skenario 2 (diurutkan berdasarkan RMSE uji), dan sebagai nilai yang diminimalkan Optuna di Skenario 3. Memilih yang terbaik dari 100 percobaan dengan soal ujian yang sama pasti menghasilkan skor yang terlalu optimistis.</p>
+      <div class="timeline" aria-label="Perbandingan penggunaan data">
+        <div class="tl"><span>Skripsi</span><div class="bar"><div class="seg-train">Latih 2000–2020</div><div class="seg-test-bad">Uji: dipakai berulang</div></div></div>
+        <div class="tl"><span>Uji ulang</span><div class="bar"><div class="seg-tr2">Latih</div><div class="seg-cv">3 lipatan CV</div><div class="seg-test-ok">Uji: dibuka sekali</div></div></div>
+      </div>
+      <p>Di Skenario 2, scaler juga di-fit pada seluruh data 2000–2025, sehingga model sedikit "mengetahui" rentang nilai di masa depan.</p>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="n">2</div>
+    <div class="body col">
+      <h3>Tidak ada pembanding sederhana, dan MSE menyukai prediksi datar</h3>
+      <p>Skripsi hanya membandingkan LSTM dengan LSTM. Baseline-nya sendiri ternyata kalah dari "rata-rata 12 bulan terakhir" di 4 kota, sehingga perbaikan 55% diukur dari titik awal yang lemah.</p>
+      <p>Uji ulang juga menunjukkan hal yang lebih halus. Grafik di bawah membandingkan seberapa besar prediksi naik-turun dibanding data aktual (1 = sama besar, 0 = garis datar). Konfigurasi Muhajir hampir datar, tetapi justru punya MSE terkecil dari semua model di Medan (0,279), Bandung (0,246), dan Surabaya (0,142). Saat polanya lemah, menebak di sekitar rata-rata adalah cara termudah mendapat MSE kecil. Keputusan skripsi saya untuk menolak model datar tetap benar.</p>
+      <div class="card"><div class="plot" id="ratioPlot"></div></div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="n">3</div>
+    <div class="body col">
+      <h3>Inflasi bulanan hampir tidak bisa ditebak dari masa lalunya</h3>
+      <p>Korelasi inflasi suatu bulan dengan bulan sebelumnya hanya 0,08–0,30. Saya menguji model linear (Ridge, 12 lag + efek bulan) sebagai pembanding: model ini juga kalah dari rata-rata 12 bulan di kelima kota. Masalahnya bukan di LSTM. Polanya memang terlalu lemah untuk ditangkap model apa pun.</p>
+      <div class="card"><div class="plot" id="acfPlot"></div></div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="n">4</div>
+    <div class="body col">
+      <h3>UMR di periode uji berada di luar pengalaman model</h3>
+      <p>UMR terus naik, sehingga nilainya di 2021–2025 sama dengan atau lebih tinggi dari nilai tertinggi di data latih. Versi pertumbuhan tahunan juga bermasalah: saat pandemi, kenaikan UMR Makassar hanya 0,2% (2021) dan 1,3% (2022), jauh di bawah kenaikan terendah di data latih (8,2%). Model dengan UMR pertumbuhan + Optuna akhirnya memprediksi inflasi Makassar rata-rata −1,6% per bulan di 2022 dan −1,1% di 2023, padahal rata-rata aktualnya +0,5% dan +0,2% (MSE 2,28).</p>
+      <div class="card"><div class="plot" id="umrPlot"></div></div>
+    </div>
+  </div>
+
+  <div class="finding">
+    <div class="n">5</div>
+    <div class="body col">
+      <h3>Model terlalu besar, dan dilatih pada era yang sudah lewat</h3>
+      <p>Konfigurasi Leipary punya <span class="mono" id="paramsTxt"></span> parameter untuk hanya <span class="mono" id="winTxt"></span> contoh latih per kota. Tanpa early stopping, model cenderung menghafal. Selain itu, naik-turun inflasi 2000–2009 kira-kira dua kali lebih besar daripada periode uji, sehingga model belajar dari kondisi ekonomi yang sudah tidak berlaku. Setiap model juga hanya dilatih sekali dengan satu seed, jadi selisih kecil antarskenario bisa saja kebetulan.</p>
+      <div class="card"><div class="plot" id="sdPlot"></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="pelajaran">
+  <div class="col">
+    <div class="eyebrow">05 · Yang saya bawa ke pekerjaan berikutnya</div>
+    <h2>Apa yang akan saya lakukan berbeda</h2>
+    <ul class="lessons">
+      <li><strong>Sisihkan data uji sejak awal</strong> dan jangan dipakai untuk keputusan apa pun. Pilih model dengan validasi di dalam data latih.</li>
+      <li><strong>Mulai dari tebakan paling sederhana.</strong> Kalau model kompleks tidak mengalahkannya, itu adalah temuan, bukan kegagalan.</li>
+      <li><strong>Cek dulu apakah targetnya bisa diprediksi</strong> (autokorelasi, model linear) sebelum memilih model yang besar.</li>
+      <li><strong>Periksa rentang fitur di data uji</strong>, terutama untuk variabel yang terus naik seperti upah atau harga.</li>
+      <li><strong>Lihat grafik, bukan hanya metrik</strong>, dan ulangi dengan beberapa seed sebelum menyimpulkan ada perbaikan.</li>
+      <li><strong>Satu notebook untuk semua kota</strong>, supaya setiap angka di laporan bisa dilacak ke kodenya.</li>
+    </ul>
+    <p>Langkah berikutnya yang paling menjanjikan adalah mengganti target menjadi inflasi tahunan (YoY) yang lebih halus, memakai data sejak 2010, dan model yang jauh lebih kecil.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="col">
+    <p><strong style="color:var(--ink)">Afnan Ahsana Syadida, S.Kom.</strong> · Data Analyst · Teknik Informatika, Universitas Muhammadiyah Magelang</p>
+    <p>Kode dan notebook: <a href="https://github.com/margoanan/inflasi-lstm-5-kota">github.com/margoanan/inflasi-lstm-5-kota</a><br>LinkedIn: <a href="https://www.linkedin.com/in/afnanahsana">linkedin.com/in/afnanahsana</a></p>
+    <p>Data: BPS (inflasi bulanan dan UMR), Jan 2000 – Des 2025. Alat: Python, pandas, scikit-learn, TensorFlow/Keras, Optuna.</p>
+  </div>
+</footer>
+</div>
+
+<script>
+const D = {"cities":["Medan","Jakarta","Bandung","Surabaya","Makassar"],"months":["2000-01","2000-02","2000-03","2000-04","2000-05","2000-06","2000-07","2000-08","2000-09","2000-10","2000-11","2000-12","2001-01","2001-02","2001-03","2001-04","2001-05","2001-06","2001-07","2001-08","2001-09","2001-10","2001-11","2001-12","2002-01","2002-02","2002-03","2002-04","2002-05","2002-06","2002-07","2002-08","2002-09","2002-10","2002-11","2002-12","2003-01","2003-02","2003-03","2003-04","2003-05","2003-06","2003-07","2003-08","2003-09","2003-10","2003-11","2003-12","2004-01","2004-02","2004-03","2004-04","2004-05","2004-06","2004-07","2004-08","2004-09","2004-10","2004-11","2004-12","2005-01","2005-02","2005-03","2005-04","2005-05","2005-06","2005-07","2005-08","2005-09","2005-10","2005-11","2005-12","2006-01","2006-02","2006-03","2006-04","2006-05","2006-06","2006-07","2006-08","2006-09","2006-10","2006-11","2006-12","2007-01","2007-02","2007-03","2007-04","2007-05","2007-06","2007-07","2007-08","2007-09","2007-10","2007-11","2007-12","2008-01","2008-02","2008-03","2008-04","2008-05","2008-06","2008-07","2008-08","2008-09","2008-10","2008-11","2008-12","2009-01","2009-02","2009-03","2009-04","2009-05","2009-06","2009-07","2009-08","2009-09","2009-10","2009-11","2009-12","2010-01","2010-02","2010-03","2010-04","2010-05","2010-06","2010-07","2010-08","2010-09","2010-10","2010-11","2010-12","2011-01","2011-02","2011-03","2011-04","2011-05","2011-06","2011-07","2011-08","2011-09","2011-10","2011-11","2011-12","2012-01","2012-02","2012-03","2012-04","2012-05","2012-06","2012-07","2012-08","2012-09","2012-10","2012-11","2012-12","2013-01","2013-02","2013-03","2013-04","2013-05","2013-06","2013-07","2013-08","2013-09","2013-10","2013-11","2013-12","2014-01","2014-02","2014-03","2014-04","2014-05","2014-06","2014-07","2014-08","2014-09","2014-10","2014-11","2014-12","2015-01","2015-02","2015-03","2015-04","2015-05","2015-06","2015-07","2015-08","2015-09","2015-10","2015-11","2015-12","2016-01","2016-02","2016-03","2016-04","2016-05","2016-06","2016-07","2016-08","2016-09","2016-10","2016-11","2016-12","2017-01","2017-02","2017-03","2017-04","2017-05","2017-06","2017-07","2017-08","2017-09","2017-10","2017-11","2017-12","2018-01","2018-02","2018-03","2018-04","2018-05","2018-06","2018-07","2018-08","2018-09","2018-10","2018-11","2018-12","2019-01","2019-02","2019-03","2019-04","2019-05","2019-06","2019-07","2019-08","2019-09","2019-10","2019-11","2019-12","2020-01","2020-02","2020-03","2020-04","2020-05","2020-06","2020-07","2020-08","2020-09","2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"trainEnd":249,"infl":{"Medan":[3.72,-1.46,-1.95,-0.77,0.34,0.67,1.75,-0.05,-0.31,0.71,0.84,2.39,1.18,1.43,0.13,-0.55,2.11,1.76,2.43,0.82,1.25,0.54,2.44,0.99,3.35,-0.42,-0.57,-0.36,1.46,-0.16,1.33,-0.54,0.45,-0.06,2.46,2.28,2.09,-0.09,-0.89,-0.37,0.06,-0.13,0.03,1.23,-1.03,1.25,1.11,1.16,-0.01,0.09,0.77,0.89,0.22,1.18,1.1,-0.18,-0.24,0.62,0.59,1.45,2.6,-1.26,1.63,1.19,0.4,0.5,1.6,0.81,0.38,11.89,1.89,-0.25,-0.03,0.97,0.47,-0.38,0.65,0.02,0.64,-0.15,0.37,0.82,0.57,1.9,1.01,0.52,0.09,-1.07,-0.19,0.75,0.82,0.22,0.91,0.67,0.86,1.67,1.08,0.2,0.9,0.21,1.57,2.07,1.36,-0.36,0.21,1.36,0.37,0.51,-0.21,-0.4,-0.24,-0.43,0.25,0.01,1.2,0.91,1.2,0.21,-0.57,0.74,1.44,0.29,-0.66,-0.08,0.29,1.91,2.05,-0.33,-0.2,0.45,0.81,1.48,1.86,-0.58,-0.94,-0.72,-0.3,1.07,0.95,1.19,1.29,-0.84,0.11,0.46,1.62,-0.82,-0.26,0.2,0.11,1.13,0.76,0.04,-0.02,0.47,0.04,0.48,1.21,0.8,0.42,0.74,0.34,1.28,2.74,0.5,0.12,1.0,0.61,-0.07,1.0,-0.59,-0.34,0.34,0.3,0.6,0.8,0.67,0.23,0.71,1.75,2.53,-0.35,-1.36,-0.01,0.96,1.01,0.77,0.82,0.59,-0.7,-0.33,0.53,1.37,0.91,0.38,0.88,-1.22,0.44,0.81,0.07,0.82,1.32,1.11,0.74,0.16,0.38,-0.64,-0.2,-0.53,0.08,0.24,0.31,1.06,1.08,0.24,0.4,0.73,0.71,-0.96,0.61,-0.01,-0.86,0.01,0.49,0.01,0.09,1.44,-0.64,0.12,0.22,-0.3,0.32,1.3,1.33,1.68,0.95,0.27,-1.92,-0.34,-0.77,-0.28,0.58,0.14,-0.19,-0.28,0.42,-0.09,-0.21,0.04,-0.05,0.45,0.3,0.65,0.38,-0.33,-0.03,0.04,0.24,0.03,0.31,-0.1,0.31,-0.05,0.46,0.44,1.04,-0.28,0.68,0.43,0.76,1.39,0.27,-0.25,0.98,-0.47,-0.13,1.54,0.86,-0.38,-0.3,-0.2,0.24,0.29,0.28,-0.06,0.38,-0.04,0.49,0.6,0.52,0.36,0.73,-0.03,0.59,-0.45,-0.64,-0.2,-0.17,0.1,0.49,0.8,0.02,-0.79,0.65,1.31,-0.48,-0.07,0.58,1.18,0.58,-0.05,-0.15,1.54],"Jakarta":[1.08,0.41,-0.17,0.11,1.13,0.13,0.95,1.19,0.15,1.14,1.11,1.65,0.18,0.87,1.14,0.72,0.81,1.55,2.17,-0.35,0.6,0.51,1.37,1.41,2.07,1.59,0.39,-0.29,0.65,0.45,0.97,0.03,0.29,0.39,1.24,0.97,1.04,0.24,-0.09,0.5,0.35,-0.03,0.15,0.87,0.47,0.32,0.9,0.92,0.54,-0.36,0.46,1.29,1.04,0.43,0.25,0.1,0.09,0.32,0.89,0.7,0.87,0.32,1.79,0.39,0.56,0.59,0.48,0.61,0.66,7.93,0.98,0.06,1.75,0.5,0.04,-0.08,0.3,0.12,0.17,0.65,0.38,0.56,0.19,1.31,0.72,1.01,0.21,0.25,0.19,0.07,0.66,0.82,0.36,0.98,-0.24,0.86,2.37,0.29,0.82,0.79,1.51,1.94,1.26,0.24,1.02,0.42,0.34,0.11,-0.24,-0.22,0.33,-0.15,0.17,0.13,0.36,0.45,0.91,0.12,-0.05,0.51,0.72,0.14,0.07,0.22,0.25,0.73,1.12,0.99,0.51,0.22,0.33,0.76,0.47,0.21,-0.01,0.07,0.15,0.43,0.61,1.15,0.13,-0.26,0.47,0.49,0.48,0.17,0.18,0.13,0.12,0.38,0.55,0.81,0.39,0.53,0.14,0.56,0.88,0.65,0.42,-0.24,-0.07,0.93,3.16,0.95,0.21,-0.03,0.14,0.78,1.05,0.5,0.19,0.04,0.05,0.41,1.17,0.49,0.16,0.4,1.43,2.74,-0.41,0.24,0.19,0.27,0.34,0.35,0.97,0.51,0.01,-0.05,0.12,0.72,0.24,-0.06,0.15,-0.27,0.19,0.52,0.64,0.01,0.18,0.25,0.24,0.27,0.99,0.33,0.05,-0.02,0.49,0.46,0.4,0.13,0.05,0.06,0.08,0.65,0.43,0.37,0.09,0.06,0.45,0.48,0.26,0.03,-0.13,0.28,0.3,0.6,0.24,0.26,0.14,0.4,0.59,0.47,0.25,0.17,-0.04,0.21,0.19,0.3,0.25,0.27,0.33,0.29,-0.02,0.06,-0.05,-0.1,0.02,0.01,0.27,0.26,0.14,0.18,0.06,0.08,0.41,-0.27,-0.04,0.08,-0.06,0.08,0.4,0.45,0.46,-0.05,0.44,0.7,0.06,0.32,0.57,-0.11,1.21,-0.05,0.05,0.55,0.09,0.19,0.36,0.4,-0.1,0.01,0.19,0.01,0.19,0.13,0.3,0.5,-0.19,0.45,0.37,0.26,-0.1,0.12,-0.06,0.04,-0.1,0.03,0.29,0.37,-1.5,-0.29,2.0,1.44,-0.24,0.13,0.11,-0.05,0.13,0.31,0.27,0.33],"Bandung":[0.6,-0.62,-0.03,-0.04,1.2,0.89,1.3,0.05,1.0,0.41,1.61,1.88,-1.01,0.88,1.81,0.39,0.92,1.71,2.19,-0.36,0.13,0.93,2.17,1.62,2.49,1.04,0.3,-0.14,0.79,0.34,1.27,0.52,1.09,0.72,2.19,0.78,-0.39,0.85,-0.16,0.87,-0.04,0.56,0.08,1.1,0.27,0.61,1.13,0.67,0.46,1.51,0.59,0.7,0.8,0.38,0.78,-0.21,0.1,0.61,0.69,0.91,1.2,-0.27,2.24,-0.16,0.3,1.04,0.59,0.43,0.7,8.22,3.37,0.63,1.26,0.28,-0.01,-0.21,0.33,0.46,0.17,0.91,0.18,0.86,-0.11,1.12,0.48,0.47,0.17,-0.01,-0.5,0.25,0.74,1.03,0.69,0.63,0.41,0.77,1.39,0.8,0.6,0.51,1.59,2.76,0.97,0.41,0.88,0.72,-0.2,-0.58,-0.29,-0.12,0.52,-0.04,-0.2,0.09,0.29,0.5,0.84,0.3,-0.02,0.22,0.55,0.26,0.03,0.14,0.09,0.25,1.26,0.51,0.43,-0.09,0.54,0.48,0.32,-0.05,-0.01,-0.02,0.12,0.17,0.51,0.38,-0.2,0.19,0.47,0.84,1.24,-0.05,0.05,0.18,-0.23,0.55,1.07,0.65,0.06,0.34,-0.1,0.19,0.64,1.03,0.63,-0.21,0.34,1.29,3.1,1.38,-0.49,-0.06,-0.24,0.33,1.09,0.39,0.11,0.05,0.19,0.2,0.74,0.41,0.57,0.14,1.27,2.34,-0.05,-0.37,0.61,0.43,0.28,0.72,0.85,0.49,-0.01,-0.06,0.19,0.78,0.53,-0.15,0.2,-0.17,0.24,0.6,0.71,-0.49,0.14,0.14,0.52,0.63,0.49,0.38,-0.02,0.1,0.47,0.99,-0.27,0.06,0.11,-0.03,0.39,0.73,0.83,0.22,0.21,0.27,0.22,0.48,0.17,-0.02,-0.24,0.5,0.36,0.71,0.09,-0.08,0.03,0.43,0.84,0.1,0.55,0.61,-0.28,-0.13,0.14,0.45,0.38,0.35,0.25,0.16,-0.25,0.41,-0.14,-0.1,-0.05,0.08,0.26,0.39,0.1,0.09,0.15,0.19,0.4,-0.09,0.19,0.09,-0.14,0.07,0.14,0.45,0.46,0.14,0.84,1.12,0.37,0.74,0.6,-0.24,0.91,0.12,0.12,2.04,0.38,0.26,-1.5,0.32,0.1,0.14,0.23,-0.02,0.11,0.08,0.22,0.32,0.1,0.38,0.55,0.13,-0.06,-0.03,0.01,0.13,-0.24,0.04,0.2,0.4,-0.89,-0.73,1.69,0.97,-0.35,0.27,0.5,-0.14,0.16,0.46,0.24,0.51],"Surabaya":[0.72,-0.06,-0.35,0.93,0.9,0.66,0.75,0.98,-0.33,2.31,1.5,2.02,0.38,1.4,0.96,0.43,0.71,1.37,2.2,0.38,0.81,0.57,1.73,2.38,1.26,1.8,-0.96,0.36,1.0,0.13,0.41,0.41,0.26,0.4,2.14,1.62,0.9,0.16,-0.17,-0.09,-0.33,-0.07,-0.21,1.96,0.52,0.65,0.91,0.48,0.19,0.26,0.42,0.54,0.76,0.49,0.19,0.38,-0.19,1.05,0.7,1.13,0.92,-0.07,1.77,0.38,-0.2,0.7,0.87,0.54,0.5,7.71,0.69,-0.28,1.61,0.38,0.15,0.42,0.12,0.45,0.24,0.35,0.22,0.66,0.9,1.03,1.05,0.06,-0.02,0.54,0.55,-0.19,0.35,0.73,0.93,0.76,0.43,0.92,1.38,0.65,1.52,0.79,1.39,2.0,0.98,0.79,0.77,0.4,0.04,-0.3,-0.18,0.96,0.28,-0.44,-0.2,0.22,0.25,0.52,1.2,0.16,0.05,0.52,0.5,0.25,-0.12,0.15,0.38,0.76,1.99,1.23,0.67,0.02,0.44,0.85,0.78,0.3,0.17,-0.22,0.07,0.49,0.54,1.08,0.6,-0.31,0.56,0.59,0.39,0.25,0.09,0.12,0.17,0.53,0.62,1.26,-0.04,0.14,0.25,0.52,0.89,1.03,0.95,-0.37,-0.07,0.55,2.67,0.99,-0.02,-0.16,0.25,0.6,1.18,0.23,0.23,0.17,0.17,0.37,0.42,0.5,0.41,0.49,1.27,2.23,0.41,-0.42,0.36,0.41,0.39,0.54,0.38,0.48,0.26,-0.34,-0.02,0.94,0.73,-0.11,0.06,-0.15,0.13,0.69,0.83,0.1,0.18,-0.1,0.26,0.56,1.76,0.16,-0.06,0.23,0.39,0.52,0.15,-0.19,0.26,0.05,0.18,0.85,0.63,0.14,0.06,0.2,0.17,0.38,0.03,0.23,0.15,0.15,0.21,0.65,0.33,-0.13,0.15,0.44,0.18,0.21,0.11,0.11,-0.02,-0.08,0.28,0.6,0.52,0.32,0.01,-0.16,0.21,0.28,-0.41,0.07,-0.18,-0.02,0.2,0.5,0.37,0.29,0.09,0.09,0.33,-0.17,0.2,0.37,-0.13,0.2,0.39,0.65,0.45,0.04,0.7,0.96,0.49,0.46,0.58,0.26,1.52,0.07,0.3,0.58,0.42,0.1,0.39,0.34,0.14,0.12,0.15,0.14,0.36,0.27,0.26,0.31,-0.26,0.45,0.6,0.52,-0.21,-0.37,0.1,-0.08,-0.11,0.11,0.19,0.44,-0.72,-0.53,1.3,1.09,-0.22,0.36,0.19,-0.07,0.17,0.35,0.21,0.8],"Makassar":[1.81,-0.02,-0.18,1.5,0.84,0.54,1.22,-0.26,-0.6,0.31,1.59,2.62,-0.69,1.49,0.8,0.1,1.39,0.47,3.1,-0.67,0.68,0.88,1.45,2.8,0.75,1.49,-0.03,0.35,-0.05,-0.19,1.36,-0.11,0.43,0.69,2.17,1.11,1.39,-1.09,-0.82,0.6,0.28,0.5,0.12,-0.4,0.15,0.57,0.98,0.72,1.2,-0.17,-0.2,0.86,0.6,-0.07,0.35,0.33,-0.06,1.23,1.08,1.17,1.94,-1.03,1.85,0.08,0.35,0.17,0.71,0.46,0.69,9.44,0.68,-0.72,1.09,1.74,-0.06,0.39,0.46,1.15,1.82,-0.23,-0.01,1.82,-0.88,-0.26,2.13,-0.05,0.2,-0.74,0.74,0.51,0.91,0.73,1.72,-0.27,-1.74,1.5,2.29,1.07,1.03,0.05,0.79,3.39,1.27,0.69,1.5,-0.18,-0.13,0.46,0.06,0.68,0.1,-0.44,-0.36,-0.34,0.41,1.21,0.89,0.22,0.29,0.49,1.3,0.1,-0.39,-0.49,0.65,0.46,2.11,1.53,0.4,-0.45,0.27,1.15,1.42,-0.26,-0.35,-0.02,0.07,0.55,0.68,0.98,-0.7,-0.48,0.19,0.77,1.26,0.35,0.38,0.36,-0.58,0.64,0.6,1.17,-0.12,-0.1,-0.1,0.63,1.19,0.73,0.25,-0.1,-0.24,0.55,3.03,1.48,-0.1,-0.74,-0.76,0.84,1.2,0.25,0.02,0.33,-0.28,0.25,1.11,0.5,0.39,0.43,1.36,2.69,-0.06,-0.19,0.63,0.38,0.35,0.75,1.29,0.44,0.57,-0.03,0.26,0.7,1.36,-0.02,0.17,-0.39,-0.1,0.3,1.13,-0.45,0.41,0.02,0.43,0.29,1.14,0.79,-0.16,0.33,-0.32,0.84,1.05,-0.34,-0.08,-0.28,0.33,1.09,0.67,0.2,0.02,0.2,0.33,0.91,0.48,-0.1,-0.85,0.35,0.3,0.93,0.54,-0.11,0.28,0.45,0.73,0.05,0.01,0.39,-0.12,0.1,0.04,0.04,0.66,0.5,-0.11,0.48,0.55,0.01,-0.54,-0.09,0.05,-0.13,0.17,0.57,0.31,0.34,0.44,0.24,0.26,-0.31,0.07,-0.34,-0.14,0.07,0.38,0.92,0.56,-0.06,0.49,1.27,0.13,0.29,1.25,-0.29,1.09,-0.11,0.31,0.74,0.67,-0.25,0.75,0.2,0.03,0.22,0.08,-0.08,-0.09,0.4,0.16,0.77,0.36,0.32,0.41,0.05,-0.06,-0.35,-0.15,-0.02,-0.12,0.2,0.18,0.37,-0.72,-1.07,2.19,1.91,-0.41,-0.16,0.59,-0.03,-0.26,0.17,0.06,0.45]},"pred":{"Medan":{"actual":[0.45,0.3,0.65,0.38,-0.33,-0.03,0.04,0.24,0.03,0.31,-0.1,0.31,-0.05,0.46,0.44,1.04,-0.28,0.68,0.43,0.76,1.39,0.27,-0.25,0.98,-0.47,-0.13,1.54,0.86,-0.38,-0.3,-0.2,0.24,0.29,0.28,-0.06,0.38,-0.04,0.49,0.6,0.52,0.36,0.73,-0.03,0.59,-0.45,-0.64,-0.2,-0.17,0.1,0.49,0.8,0.02,-0.79,0.65,1.31,-0.48,-0.07,0.58,1.18,0.58,-0.05,-0.15,1.54],"bench":[-0.086,-0.02,0.069,0.147,0.13,0.091,0.104,0.131,0.116,0.126,0.169,0.158,0.188,0.146,0.159,0.142,0.197,0.201,0.26,0.292,0.336,0.449,0.446,0.433,0.489,0.454,0.405,0.497,0.482,0.473,0.392,0.339,0.296,0.204,0.205,0.221,0.171,0.207,0.258,0.18,0.152,0.213,0.299,0.313,0.342,0.281,0.204,0.192,0.147,0.158,0.158,0.175,0.133,0.038,0.031,0.142,0.053,0.085,0.187,0.302,0.364,0.352,0.298],"base":[0.21,0.286,0.392,0.418,0.287,0.184,0.416,0.581,0.704,0.665,0.674,0.472,0.406,0.399,0.494,0.522,0.766,0.339,0.823,1.049,1.367,1.769,0.11,0.399,1.306,2.275,1.166,0.789,0.909,0.561,0.564,0.63,0.545,0.919,1.01,0.527,0.738,0.465,0.908,0.582,0.476,0.777,1.159,0.767,1.154,0.591,0.16,0.393,0.421,0.536,0.612,0.556,0.332,0.253,0.242,0.381,-0.116,0.386,0.831,1.441,0.962,0.411,0.574],"opt":[0.094,0.114,0.128,0.11,0.112,0.028,0.045,0.102,0.106,0.094,0.094,0.088,0.084,0.1,0.097,0.138,0.136,0.058,0.036,0.151,0.089,0.158,0.055,-0.05,0.122,0.094,-0.019,0.213,0.175,-0.098,-0.071,0.006,0.044,0.064,0.037,0.01,0.03,0.037,0.031,0.086,0.035,0.003,0.018,-0.011,-0.019,-0.016,-0.108,-0.044,-0.009,-0.0,0.041,0.06,-0.027,-0.139,-0.05,0.106,-0.104,-0.169,0.003,0.051,-0.036,-0.138,-0.106]},"Jakarta":{"actual":[0.01,0.27,0.26,0.14,0.18,0.06,0.08,0.41,-0.27,-0.04,0.08,-0.06,0.08,0.4,0.45,0.46,-0.05,0.44,0.7,0.06,0.32,0.57,-0.11,1.21,-0.05,0.05,0.55,0.09,0.19,0.36,0.4,-0.1,0.01,0.19,0.01,0.19,0.13,0.3,0.5,-0.19,0.45,0.37,0.26,-0.1,0.12,-0.06,0.04,-0.1,0.03,0.29,0.37,-1.5,-0.29,2.0,1.44,-0.24,0.13,0.11,-0.05,0.13,0.31,0.27,0.33],"bench":[0.146,0.129,0.136,0.132,0.123,0.116,0.093,0.076,0.112,0.084,0.085,0.1,0.093,0.099,0.11,0.126,0.152,0.133,0.165,0.217,0.188,0.237,0.288,0.272,0.378,0.367,0.338,0.346,0.315,0.335,0.328,0.303,0.29,0.264,0.232,0.242,0.158,0.172,0.193,0.189,0.166,0.188,0.188,0.177,0.177,0.186,0.165,0.168,0.143,0.135,0.134,0.123,0.014,-0.048,0.088,0.187,0.175,0.176,0.19,0.182,0.202,0.225,0.223],"base":[0.145,0.15,0.139,0.102,0.074,0.072,0.117,0.162,0.102,0.071,0.068,0.098,0.125,0.119,0.088,0.078,0.096,0.187,0.266,0.231,0.175,0.091,0.092,0.093,0.166,0.291,0.218,0.168,0.16,0.417,0.284,0.131,0.209,0.267,0.206,0.461,0.102,0.119,0.13,0.132,0.097,0.076,0.082,0.136,0.068,0.067,0.099,0.139,0.148,0.16,0.126,0.143,0.125,0.107,0.154,0.119,-0.002,0.048,0.354,0.46,0.367,0.322,0.304],"opt":[0.166,0.271,0.33,0.239,0.108,0.337,0.33,0.209,0.186,-0.126,-0.117,0.184,0.106,0.18,0.296,0.264,0.117,0.162,0.467,0.377,0.074,0.184,0.306,0.038,0.455,-0.076,0.032,0.387,0.141,0.16,0.216,0.175,0.126,0.174,0.168,0.233,0.14,0.197,0.3,0.282,0.03,0.213,0.273,0.053,-0.132,0.029,0.1,0.106,0.093,0.184,0.275,0.264,0.048,0.179,0.269,0.31,0.02,0.038,0.384,0.398,0.34,0.254,0.119]},"Bandung":{"actual":[0.08,0.26,0.39,0.1,0.09,0.15,0.19,0.4,-0.09,0.19,0.09,-0.14,0.07,0.14,0.45,0.46,0.14,0.84,1.12,0.37,0.74,0.6,-0.24,0.91,0.12,0.12,2.04,0.38,0.26,-1.5,0.32,0.1,0.14,0.23,-0.02,0.11,0.08,0.22,0.32,0.1,0.38,0.55,0.13,-0.06,-0.03,0.01,0.13,-0.24,0.04,0.2,0.4,-0.89,-0.73,1.69,0.97,-0.35,0.27,0.5,-0.14,0.16,0.46,0.24,0.51],"bench":[0.122,0.14,0.15,0.145,0.122,0.1,0.092,0.094,0.148,0.107,0.134,0.15,0.142,0.142,0.132,0.137,0.167,0.171,0.228,0.306,0.303,0.372,0.407,0.379,0.467,0.471,0.469,0.602,0.595,0.605,0.41,0.343,0.321,0.271,0.24,0.258,0.192,0.188,0.197,0.053,0.03,0.04,0.211,0.195,0.182,0.168,0.149,0.162,0.132,0.129,0.128,0.134,0.052,-0.041,0.054,0.124,0.1,0.125,0.166,0.143,0.177,0.212,0.215],"base":[0.294,0.478,0.492,0.395,0.16,0.164,0.349,0.498,0.259,0.153,0.132,0.281,0.499,0.46,0.286,0.275,0.291,0.23,0.297,0.81,0.463,0.292,0.15,0.109,0.223,-0.162,-0.019,1.853,0.619,1.59,2.632,0.769,1.056,0.861,0.711,0.518,0.279,0.39,0.521,0.267,0.106,0.134,0.362,0.35,0.189,0.208,0.402,0.572,0.427,0.202,0.268,0.511,0.301,0.215,0.548,0.545,0.108,0.01,0.106,0.428,0.56,0.346,0.101],"opt":[0.023,0.041,0.055,0.052,0.018,0.005,0.004,0.002,-0.003,-0.038,-0.018,-0.024,-0.014,0.015,0.03,0.037,0.003,-0.056,-0.057,-0.152,-0.309,-0.272,-0.266,-0.232,-0.078,-0.112,-0.08,0.028,-0.31,-0.288,-0.228,-0.109,-0.084,-0.065,-0.073,-0.094,-0.095,-0.1,-0.097,-0.1,-0.121,-0.121,-0.142,-0.2,-0.191,-0.148,-0.107,-0.076,-0.072,-0.048,-0.039,-0.074,-0.143,-0.145,0.034,-0.114,-0.275,-0.221,-0.204,-0.226,-0.168,-0.134,-0.157]},"Surabaya":{"actual":[-0.02,0.2,0.5,0.37,0.29,0.09,0.09,0.33,-0.17,0.2,0.37,-0.13,0.2,0.39,0.65,0.45,0.04,0.7,0.96,0.49,0.46,0.58,0.26,1.52,0.07,0.3,0.58,0.42,0.1,0.39,0.34,0.14,0.12,0.15,0.14,0.36,0.27,0.26,0.31,-0.26,0.45,0.6,0.52,-0.21,-0.37,0.1,-0.08,-0.11,0.11,0.19,0.44,-0.72,-0.53,1.3,1.09,-0.22,0.36,0.19,-0.07,0.17,0.35,0.21,0.8],"bench":[0.122,0.127,0.12,0.112,0.099,0.097,0.103,0.124,0.134,0.097,0.148,0.172,0.177,0.195,0.211,0.223,0.23,0.209,0.26,0.332,0.346,0.398,0.43,0.421,0.558,0.548,0.54,0.534,0.532,0.537,0.511,0.459,0.43,0.402,0.366,0.356,0.259,0.276,0.272,0.25,0.193,0.222,0.24,0.255,0.226,0.185,0.181,0.162,0.123,0.11,0.104,0.115,0.077,-0.005,0.053,0.101,0.1,0.161,0.168,0.169,0.192,0.212,0.214],"base":[0.122,0.433,0.775,0.142,0.054,0.063,0.132,-0.004,0.047,0.121,0.058,0.088,0.122,0.18,-0.104,-0.058,-0.014,0.021,-0.015,0.075,0.177,-0.027,0.127,0.343,1.627,0.476,0.604,0.606,0.888,3.158,0.83,0.689,0.562,0.976,1.338,1.127,0.192,-0.076,0.02,0.032,0.148,-0.038,-0.011,0.015,0.026,0.063,0.246,0.242,0.056,0.138,0.1,0.174,0.486,0.149,0.05,-0.057,0.028,-0.02,0.066,0.24,0.424,0.585,0.167],"opt":[0.228,0.287,0.294,0.303,0.165,0.152,0.149,0.228,0.311,0.076,0.25,0.288,0.076,0.247,0.298,0.292,0.095,0.027,0.431,0.356,-0.076,0.094,0.25,0.081,0.681,-0.423,0.126,0.348,0.099,-0.021,0.19,0.166,0.08,0.124,0.181,0.187,0.244,0.144,0.154,0.2,0.039,0.389,0.275,0.093,-0.08,0.092,0.394,0.201,0.139,0.196,0.225,0.272,-0.064,0.139,0.874,0.019,-0.197,0.161,0.226,0.112,0.173,0.174,0.089]},"Makassar":{"actual":[-0.13,0.17,0.57,0.31,0.34,0.44,0.24,0.26,-0.31,0.07,-0.34,-0.14,0.07,0.38,0.92,0.56,-0.06,0.49,1.27,0.13,0.29,1.25,-0.29,1.09,-0.11,0.31,0.74,0.67,-0.25,0.75,0.2,0.03,0.22,0.08,-0.08,-0.09,0.4,0.16,0.77,0.36,0.32,0.41,0.05,-0.06,-0.35,-0.15,-0.02,-0.12,0.2,0.18,0.37,-0.72,-1.07,2.19,1.91,-0.41,-0.16,0.59,-0.03,-0.26,0.17,0.06,0.45],"bench":[0.141,0.122,0.132,0.177,0.148,0.134,0.18,0.16,0.136,0.109,0.16,0.139,0.123,0.14,0.158,0.187,0.208,0.174,0.178,0.264,0.253,0.303,0.402,0.406,0.508,0.493,0.488,0.472,0.482,0.466,0.488,0.398,0.39,0.384,0.287,0.304,0.206,0.248,0.236,0.238,0.212,0.26,0.232,0.219,0.212,0.164,0.145,0.15,0.148,0.131,0.132,0.099,0.009,-0.107,0.042,0.197,0.168,0.183,0.245,0.244,0.232,0.23,0.22],"base":[0.386,0.461,0.378,0.699,0.581,0.401,0.545,0.404,0.192,0.155,0.195,0.275,0.346,0.486,0.574,0.481,0.455,0.448,0.385,0.374,0.217,0.152,0.038,0.424,0.594,-0.114,0.431,0.433,0.529,0.619,1.063,0.01,1.126,1.432,0.615,0.633,0.516,0.474,0.751,0.613,0.362,0.634,0.369,0.348,0.348,0.237,0.224,0.423,0.516,0.5,0.733,0.52,0.433,0.4,0.263,0.213,0.175,0.051,-0.036,0.57,0.38,0.148,-0.074],"opt":[0.199,0.184,0.141,0.106,0.113,0.111,0.108,0.131,0.148,0.159,0.172,0.187,0.182,0.168,0.13,0.104,0.07,0.096,0.121,0.117,0.129,0.113,0.084,0.139,0.14,0.114,0.144,0.152,0.09,0.141,0.091,0.114,0.128,0.108,0.091,0.131,0.112,0.099,0.096,0.065,0.05,0.056,0.076,0.083,0.112,0.11,0.12,0.115,0.093,0.073,0.055,0.053,0.077,0.117,0.074,-0.019,-0.04,-0.042,0.027,0.159,0.114,0.024,0.045]}},"testMonths":["2020-10","2020-11","2020-12","2021-01","2021-02","2021-03","2021-04","2021-05","2021-06","2021-07","2021-08","2021-09","2021-10","2021-11","2021-12","2022-01","2022-02","2022-03","2022-04","2022-05","2022-06","2022-07","2022-08","2022-09","2022-10","2022-11","2022-12","2023-01","2023-02","2023-03","2023-04","2023-05","2023-06","2023-07","2023-08","2023-09","2023-10","2023-11","2023-12","2024-01","2024-02","2024-03","2024-04","2024-05","2024-06","2024-07","2024-08","2024-09","2024-10","2024-11","2024-12","2025-01","2025-02","2025-03","2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12"],"mse":[{"kota":"Medan","thesis_base":0.6047,"thesis_umr":0.4677,"thesis_opt":0.2712,"naive":0.4904682539682539,"hist":0.3395327851854924,"roll12":0.302020205026455,"seas":0.4319031746031745,"s1a":0.2793906422332607,"s1b":0.287121202783794,"s1c":0.5416842711110572,"s2l":0.5192782776523447,"s2g":0.7238427787577649,"s3l":0.3380180516840361,"s3g":0.5883604781113491},{"kota":"Jakarta","thesis_base":0.2097,"thesis_umr":0.1982,"thesis_opt":0.1285,"naive":0.3418142857142857,"hist":0.2843070461997157,"roll12":0.2018759038800705,"seas":0.1978650793650793,"s1a":0.1930735317377734,"s1b":0.2089523839101521,"s1c":0.1940666193006887,"s2l":0.1830751017086195,"s2g":0.191448522373749,"s3l":0.2009842006687612,"s3g":0.3426464270336002},{"kota":"Bandung","thesis_base":0.3731,"thesis_umr":0.2994,"thesis_opt":0.2449,"naive":0.4670444444444445,"hist":0.3264300065052715,"roll12":0.2727443452380952,"seas":0.4308412698412698,"s1a":0.2464106672062704,"s1b":0.2657134920027276,"s1c":0.5616419949802631,"s2l":0.2617019106794231,"s2g":0.246902378227402,"s3l":0.3543854700701869,"s3g":0.2756086253765407},{"kota":"Surabaya","thesis_base":0.1831,"thesis_umr":0.1547,"thesis_opt":0.1377,"naive":0.2463333333333333,"hist":0.2074165039580775,"roll12":0.1525270502645503,"seas":0.1896809523809524,"s1a":0.1423490362972623,"s1b":0.1444192979052783,"s1c":0.4082518310913036,"s2l":0.1861962778062379,"s2g":0.1612574610315474,"s3l":0.1605139034771744,"s3g":0.6187563579061213},{"kota":"Makassar","thesis_base":0.2701,"thesis_umr":0.3351,"thesis_opt":0.2613,"naive":0.533542857142857,"hist":0.360732041341883,"roll12":0.3087557649911817,"seas":0.3547857142857142,"s1a":0.2866976264860358,"s1b":0.2934911396745809,"s1c":0.3762707693836553,"s2l":0.2838154032723222,"s2g":0.3429346182197678,"s3l":0.3015904859264536,"s3g":2.277250420290754}],"ratio":{"Medan":[0.03,0.15,0.77],"Jakarta":[0.04,0.26,0.23],"Bandung":[0.05,0.26,0.87],"Surabaya":[0.04,0.24,1.34],"Makassar":[0.02,0.16,0.5]},"audit":[{"kota":"Medan","acf1":0.17,"acf12":0.14,"ridge":0.3412,"seas5":0.2963,"sd_0009":1.41,"sd_1020":0.78,"sd_test":0.52,"max_train":11.89,"umr_growth":{"2001":7.4,"2002":16.1,"2003":12.3,"2004":4.9,"2005":16.2,"2006":10.0,"2007":10.9,"2008":10.3,"2009":12.9,"2010":16.3,"2011":10.7,"2012":10.8,"2013":15.9,"2014":16.0,"2015":14.8,"2016":12.1,"2017":10.0,"2018":9.1,"2019":7.9,"2020":10.1,"2021":0.0,"2022":1.2,"2023":7.5,"2024":4.0,"2025":6.5},"umr_growth_train_min":4.9},{"kota":"Jakarta","acf1":0.2,"acf12":0.1,"ridge":0.2535,"seas5":0.179,"sd_0009":0.87,"sd_1020":0.46,"sd_test":0.43,"max_train":7.93,"umr_growth":{"2001":7.8,"2002":3.0,"2003":4.2,"2004":5.5,"2005":9.6,"2006":13.9,"2007":11.0,"2008":8.6,"2009":9.2,"2010":4.8,"2011":15.4,"2012":18.6,"2013":43.8,"2014":11.0,"2015":10.6,"2016":14.8,"2017":8.3,"2018":8.7,"2019":8.0,"2020":8.5,"2021":3.3,"2022":5.1,"2023":5.6,"2024":3.4,"2025":6.5},"umr_growth_train_min":3.0},{"kota":"Bandung","acf1":0.3,"acf12":0.09,"ridge":0.2891,"seas5":0.2589,"sd_0009":1.0,"sd_1020":0.49,"sd_test":0.5,"max_train":8.22,"umr_growth":{"2001":11.4,"2002":15.4,"2003":16.7,"2004":9.9,"2005":10.1,"2006":11.0,"2007":10.1,"2008":10.2,"2009":11.1,"2010":10.5,"2011":11.2,"2012":14.1,"2013":23.8,"2014":21.2,"2015":17.1,"2016":12.2,"2017":8.2,"2018":8.6,"2019":8.1,"2020":8.5,"2021":3.3,"2022":0.9,"2023":7.0,"2024":6.4,"2025":4.3},"umr_growth_train_min":8.1},{"kota":"Surabaya","acf1":0.2,"acf12":0.18,"ridge":0.1799,"seas5":0.1581,"sd_0009":0.91,"sd_1020":0.48,"sd_test":0.38,"max_train":7.71,"umr_growth":{"2001":11.4,"2002":17.9,"2003":14.1,"2004":8.6,"2005":11.4,"2006":7.9,"2007":10.2,"2008":10.6,"2009":13.2,"2010":10.6,"2011":11.0,"2012":13.8,"2013":35.2,"2014":23.2,"2015":23.2,"2016":12.2,"2017":8.4,"2018":8.7,"2019":8.8,"2020":7.7,"2021":2.4,"2022":1.7,"2023":3.4,"2024":4.5,"2025":5.0},"umr_growth_train_min":7.7},{"kota":"Makassar","acf1":0.08,"acf12":0.29,"ridge":0.3317,"seas5":0.2624,"sd_0009":1.2,"sd_1020":0.63,"sd_test":0.54,"max_train":9.44,"umr_growth":{"2001":13.3,"2002":11.8,"2003":15.1,"2004":10.1,"2005":10.7,"2006":11.7,"2007":9.1,"2008":9.0,"2009":11.3,"2010":11.0,"2011":10.5,"2012":15.1,"2013":13.7,"2014":12.0,"2015":19.4,"2016":13.4,"2017":8.7,"2018":9.0,"2019":8.2,"2020":9.9,"2021":0.2,"2022":1.3,"2023":6.9,"2024":3.4,"2025":6.5},"umr_growth_train_min":8.2}],"params":510785,"trainWindows":237};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d=3) => v.toFixed(d).replace(".", ",");
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs={}, parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
+function svg(container, w, h, label){ container.innerHTML=""; const s=el("svg",{viewBox:`0 0 ${w} ${h}`,class:"chart",role:"img","aria-label":label}); container.appendChild(s); return s; }
+function tip(container){ let t=container.querySelector(".tip"); if(!t){ t=document.createElement("div"); t.className="tip"; container.appendChild(t);} return t; }
+const SHORT = m => { const [y,mm]=m.split("-"); return ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][+mm-1]+" "+y; };
+
+/* ---------- hero dot plot ---------- */
+function hero(){
+  const box=document.getElementById("heroPlot"), W=900, rowH=46, top=26, H=top+rowH*5+30, L=110, R=30;
+  const s=svg(box,W,H,"Perbandingan MSE skripsi, uji ulang, dan rata-rata 12 bulan untuk 5 kota");
+  const x=v=>L+(v/0.4)*(W-L-R);
+  const g=el("g",{class:"grid"},s);
+  [0,0.1,0.2,0.3,0.4].forEach(v=>{ el("line",{x1:x(v),x2:x(v),y1:top-8,y2:H-26},g); el("text",{x:x(v),y:H-8,"text-anchor":"middle"},s).textContent=fmt(v,1); });
+  const t=tip(box);
+  D.mse.forEach((r,i)=>{
+    const y=top+i*rowH+rowH/2-6;
+    el("text",{x:0,y:y+5,class:"lbl"},s).textContent=r.kota;
+    const vals=[r.thesis_opt,r.s3l,r.roll12];
+    el("line",{x1:x(Math.min(...vals)),x2:x(Math.max(...vals)),y1:y,y2:y,stroke:css("--line"),"stroke-width":3},s);
+    const pts=[["Skripsi (Optuna)",r.thesis_opt,css("--amber"),true],["Uji ulang (Optuna)",r.s3l,css("--teal"),true],["Rata-rata 12 bulan",r.roll12,css("--grey"),false]];
+    pts.forEach(([name,v,c,fill])=>{
+      const d=el("circle",{cx:x(v),cy:y,r:8,fill:fill?c:css("--surface"),stroke:c,"stroke-width":fill?0:2.5,class:"dot",tabindex:0},s);
+      const show=()=>{ t.style.display="block"; t.innerHTML=`${r.kota} · ${name}<br>MSE <b>${fmt(v,4)}</b>`; const b=box.getBoundingClientRect(), sc=b.width/W; t.style.left=Math.min(x(v)*sc+10,b.width-190)+"px"; t.style.top=(y*sc-46)+"px"; d.setAttribute("r",10); };
+      const hide=()=>{ t.style.display="none"; d.setAttribute("r",8); };
+      d.addEventListener("mouseenter",show); d.addEventListener("mouseleave",hide); d.addEventListener("focus",show); d.addEventListener("blur",hide);
+    });
+  });
+}
+
+/* ---------- generic line chart ---------- */
+function lineChart(box, months, series, opts){
+  const W=900,H=opts.h||320,L=48,R=16,T=16,B=34;
+  const s=svg(box,W,H,opts.label);
+  const all=series.filter(z=>z.on!==false).flatMap(z=>z.values);
+  let lo=Math.min(...all,opts.min??0), hi=Math.max(...all);
+  lo=Math.floor(lo*2)/2; hi=Math.ceil(hi*2)/2;
+  const n=months.length, x=i=>L+i*(W-L-R)/(n-1), y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  if(opts.shadeFrom!=null){ el("rect",{x:x(opts.shadeFrom),y:T,width:W-R-x(opts.shadeFrom),height:H-T-B,fill:css("--teal"),opacity:.08},s);
+    el("text",{x:x(opts.shadeFrom)+6,y:T+14},s).textContent="Periode uji"; }
+  const g=el("g",{class:"grid"},s);
+  const step=(hi-lo)>6?2:(hi-lo)>3?1:0.5;
+  for(let v=Math.ceil(lo/step)*step; v<=hi+1e-9; v+=step){ el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v)},g); el("text",{x:L-8,y:y(v)+4,"text-anchor":"end"},s).textContent=fmt(v,step<1?1:0); }
+  if(lo<0&&hi>0) el("line",{x1:L,x2:W-R,y1:y(0),y2:y(0),stroke:css("--muted"),"stroke-width":1},s);
+  const yearStep=opts.yearStep||1;
+  months.forEach((m,i)=>{ if(m.endsWith("-01") && (+m.slice(0,4))%yearStep===0) el("text",{x:x(i),y:H-12,"text-anchor":"middle"},s).textContent=m.slice(0,4); });
+  series.forEach(z=>{ if(z.on===false) return;
+    el("path",{d:z.values.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1)).join(""),fill:"none",stroke:z.color,"stroke-width":z.width||2,"stroke-dasharray":z.dash||"","stroke-linejoin":"round"},s); });
+  (opts.notes||[]).forEach(nt=>{ el("text",{x:x(nt.i)+8,y:y(nt.v)+4,class:"lbl"},s).textContent=nt.text; });
+  const t=tip(box), cross=el("line",{y1:T,y2:H-B,stroke:css("--muted"),"stroke-dasharray":"3 3",opacity:0},s);
+  const hit=el("rect",{x:L,y:T,width:W-L-R,height:H-T-B,fill:"transparent"},s);
+  hit.addEventListener("mousemove",ev=>{ const b=box.getBoundingClientRect(), sc=b.width/W, px=(ev.clientX-b.left)/sc;
+    const i=Math.max(0,Math.min(n-1,Math.round((px-L)/((W-L-R)/(n-1))))); cross.setAttribute("x1",x(i)); cross.setAttribute("x2",x(i)); cross.setAttribute("opacity",1);
+    t.style.display="block"; t.innerHTML=`<b>${SHORT(months[i])}</b><br>`+series.filter(z=>z.on!==false).map(z=>`<span style="color:${z.color}">■</span> ${z.name}: ${fmt(z.values[i],2)}%`).join("<br>");
+    t.style.left=Math.min(x(i)*sc+12,b.width-260)+"px"; t.style.top="10px"; });
+  hit.addEventListener("mouseleave",()=>{ t.style.display="none"; cross.setAttribute("opacity",0); });
+}
+
+/* ---------- tabs helper ---------- */
+function tabs(id, items, onPick, initial){
+  const box=document.getElementById(id); box.innerHTML="";
+  items.forEach(k=>{ const b=document.createElement("button"); b.className="tab"; b.type="button"; b.textContent=k; b.setAttribute("aria-pressed",k===initial);
+    b.addEventListener("click",()=>{ box.querySelectorAll("button").forEach(x=>x.setAttribute("aria-pressed",x===b)); onPick(k); }); box.appendChild(b); });
+  onPick(initial);
+}
+
+/* ---------- data chart ---------- */
+function dataChart(city){
+  const i05=D.months.indexOf("2005-10");
+  lineChart(document.getElementById("dataPlot"), D.months, [{name:city,values:D.infl[city],color:css("--ink"),width:1.4}],
+    {label:`Inflasi bulanan ${city} 2000–2025`, shadeFrom:D.trainEnd, h:300, yearStep:5, min:-1,
+     notes:[{i:i05,v:D.infl[city][i05],text:"BBM, Okt 2005"}]});
+}
+
+/* ---------- prediction chart ---------- */
+const SER=[{k:"actual",name:"Aktual",color:()=>css("--ink"),width:2.2,on:true},
+           {k:"bench",name:"Rata-rata 12 bulan",color:()=>css("--grey"),dash:"2 4",on:true},
+           {k:"base",name:"LSTM baseline (Leipary)",color:()=>css("--amber"),dash:"6 4",on:false},
+           {k:"opt",name:"LSTM + UMR + Optuna",color:()=>css("--teal"),on:true}];
+let predCity="Jakarta";
+function predChart(){
+  const p=D.pred[predCity];
+  lineChart(document.getElementById("predPlot"), D.testMonths, SER.map(z=>({name:z.name,values:p[z.k],color:z.color(),dash:z.dash,width:z.width,on:z.on})),
+    {label:`Prediksi vs aktual ${predCity}, periode uji`, h:320, min:-1});
+}
+function predToggles(){
+  const box=document.getElementById("predToggles");
+  SER.forEach(z=>{ if(z.k==="actual") return; const b=document.createElement("button"); b.className="tog"; b.type="button";
+    b.innerHTML=`<i style="background:${z.color()}"></i>${z.name}`; b.setAttribute("aria-pressed",z.on);
+    b.addEventListener("click",()=>{ z.on=!z.on; b.setAttribute("aria-pressed",z.on); predChart(); }); box.appendChild(b); });
+}
+
+/* ---------- tables ---------- */
+function thesisTable(){
+  const t=document.getElementById("thesisTable");
+  let h="<thead><tr><th>Kota</th><th>Baseline</th><th>+ UMR</th><th>+ Optuna</th><th>Perubahan</th></tr></thead><tbody>";
+  D.mse.forEach(r=>{ const d=(r.thesis_opt/r.thesis_base-1)*100;
+    h+=`<tr><td>${r.kota}</td><td class="thesis">${fmt(r.thesis_base,4)}</td><td class="thesis">${fmt(r.thesis_umr,4)}</td><td class="thesis">${fmt(r.thesis_opt,4)}</td><td>${fmt(d,0)}%</td></tr>`; });
+  t.innerHTML=h+"</tbody>";
+}
+function retestTable(){
+  const t=document.getElementById("retestTable");
+  const cols=[["roll12","Rata-rata 12 bln"],["seas","Sama dgn 12 bln lalu"],["naive","Sama dgn bulan lalu"],["s1c","LSTM baseline"],["s2l","+ UMR"],["s3l","+ UMR + Optuna"]];
+  let h=`<thead><tr><th>Kota</th>${cols.map(c=>`<th>${c[1]}</th>`).join("")}<th>Skripsi (Optuna)</th></tr></thead><tbody>`;
+  D.mse.forEach(r=>{ const best=Math.min(...cols.map(c=>r[c[0]]));
+    h+=`<tr><td>${r.kota}</td>${cols.map(c=>`<td class="${r[c[0]]===best?"best":""}">${fmt(r[c[0]],4)}</td>`).join("")}<td class="thesis">${fmt(r.thesis_opt,4)}</td></tr>`; });
+  t.innerHTML=h+"</tbody>";
+}
+
+/* ---------- small bar charts ---------- */
+function hbars(boxId, rows, opts){
+  const box=document.getElementById(boxId), L=opts.left||110, W=760, rowH=opts.rowH||30, T=opts.top||8, H=T+rows.length*rowH+30, R=60;
+  const s=svg(box,W,H,opts.label), max=opts.max, x=v=>L+Math.max(0,v)/max*(W-L-R);
+  const g=el("g",{class:"grid"},s);
+  opts.ticks.forEach(v=>{ el("line",{x1:x(v),x2:x(v),y1:T,y2:H-26},g); el("text",{x:x(v),y:H-8,"text-anchor":"middle"},s).textContent=fmt(v,opts.tickDec??1); });
+  if(opts.ref!=null){ el("line",{x1:x(opts.ref),x2:x(opts.ref),y1:T,y2:H-26,stroke:css("--ink"),"stroke-width":1.5,"stroke-dasharray":"4 3"},s);
+    el("text",{x:x(opts.ref)+4,y:T+10,class:"lbl","font-size":12},s).textContent=opts.refLabel; }
+  rows.forEach((r,i)=>{ const y=T+i*rowH;
+    if(r.label) el("text",{x:0,y:y+rowH/2+4,class:r.bold?"lbl":""},s).textContent=r.label;
+    el("rect",{x:L,y:y+5,width:Math.max(2,x(r.v)-L),height:rowH-12,rx:3,fill:r.color},s);
+    el("text",{x:x(r.v)+6,y:y+rowH/2+4},s).textContent=r.text??fmt(r.v,2); });
+}
+function ratioChart(){
+  const names=["Muhajir","Masipupu","Leipary"], cols=[css("--grey"),css("--grey"),css("--teal")], rows=[];
+  D.cities.forEach(c=>{ names.forEach((nm,j)=>rows.push({label:j===0?c:"",bold:true,v:D.ratio[c][j],color:cols[j],text:`${nm} ${fmt(D.ratio[c][j],2)}`})); });
+  hbars("ratioPlot",rows,{label:"Rasio variasi prediksi terhadap aktual per konfigurasi",max:1.5,ticks:[0,0.5,1,1.5],ref:1,refLabel:"variasi = aktual",rowH:22,left:96});
+}
+function acfChart(){
+  const rows=D.audit.map(a=>({label:a.kota,bold:true,v:a.acf1,color:css("--amber")}));
+  hbars("acfPlot",rows,{label:"Korelasi inflasi dengan bulan sebelumnya per kota",max:1,ticks:[0,0.25,0.5,0.75,1],tickDec:2,rowH:32});
+}
+function sdChart(){
+  const rows=[]; D.audit.forEach(a=>{ rows.push({label:a.kota,bold:true,v:a.sd_0009,color:css("--grey"),text:`2000–09: ${fmt(a.sd_0009,2)}`}); rows.push({label:"",v:a.sd_test,color:css("--teal"),text:`uji: ${fmt(a.sd_test,2)}`}); });
+  hbars("sdPlot",rows,{label:"Simpangan baku inflasi bulanan 2000–2009 dibanding periode uji",max:1.6,ticks:[0,0.4,0.8,1.2,1.6],rowH:22,left:96});
+}
+function umrChart(){
+  const a=D.audit.find(z=>z.kota==="Makassar"), years=Object.keys(a.umr_growth).map(Number), box=document.getElementById("umrPlot");
+  const W=760,H=260,L=40,R=10,T=16,B=30, s=svg(box,W,H,"Kenaikan UMR Makassar per tahun dibanding rentang data latih");
+  const max=25, bw=(W-L-R)/years.length, y=v=>T+(max-v)/max*(H-T-B);
+  const g=el("g",{class:"grid"},s); [0,5,10,15,20,25].forEach(v=>{ el("line",{x1:L,x2:W-R,y1:y(v),y2:y(v)},g); el("text",{x:L-6,y:y(v)+4,"text-anchor":"end"},s).textContent=v+"%"; });
+  years.forEach((yr,i)=>{ const v=a.umr_growth[yr], test=yr>=2021;
+    el("rect",{x:L+i*bw+2,y:y(Math.max(v,0)),width:bw-4,height:Math.max(1,y(0)-y(Math.max(v,0))),rx:2,fill:test?css("--amber"):css("--grey"),opacity:test?1:.55},s);
+    if(yr%4===1||yr===2025) el("text",{x:L+i*bw+bw/2,y:H-10,"text-anchor":"middle"},s).textContent=yr; });
+  el("line",{x1:L,x2:W-R,y1:y(a.umr_growth_train_min),y2:y(a.umr_growth_train_min),stroke:css("--ink"),"stroke-dasharray":"4 3","stroke-width":1.5},s);
+  el("text",{x:L+6,y:y(a.umr_growth_train_min)-6,class:"lbl","font-size":12},s).textContent=`Kenaikan terendah di data latih: ${fmt(a.umr_growth_train_min,1)}%`;
+  el("text",{x:W-R-4,y:T+12,"text-anchor":"end",class:"lbl","font-size":12},s).textContent="Oranye = periode uji (2021–2025)";
+}
+
+function render(){
+  hero(); thesisTable(); retestTable(); ratioChart(); acfChart(); umrChart(); sdChart();
+  document.getElementById("paramsTxt").textContent=D.params.toLocaleString("id-ID");
+  document.getElementById("winTxt").textContent=D.trainWindows;
+}
+tabs("dataTabs", D.cities, c=>dataChart(c), "Medan");
+tabs("predTabs", D.cities, c=>{ predCity=c; predChart(); }, "Jakarta");
+predToggles(); render();
+const mq=window.matchMedia("(prefers-color-scheme: dark)");
+const rerender=()=>{ render(); predChart(); const on=document.querySelector("#dataTabs [aria-pressed=true]"); dataChart(on?on.textContent:"Medan"); };
+mq.addEventListener?.("change",rerender);
+new MutationObserver(rerender).observe(document.documentElement,{attributes:true,attributeFilter:["data-theme"]});
+</script>
+</body>
+</html>
