@@ -1,0 +1,6 @@
+Kota,0. Rata-rata 12 bulan,1. Baseline (Leipary),2a. + UMR level,2b. + UMR growth,3a. + UMR level + Optuna,3b. + UMR growth + Optuna,Δ 3a vs rata-rata 12 bln (%),Δ 3b vs rata-rata 12 bln (%)
+KOTA MEDAN,0.302,0.5417,0.5193,0.7238,0.338,0.5884,11.9,94.8
+DKI JAKARTA,0.2019,0.1941,0.1831,0.1914,0.201,0.3426,-0.4,69.7
+KOTA BANDUNG,0.2727,0.5616,0.2617,0.2469,0.3544,0.2756,30.0,1.1
+KOTA SURABAYA,0.1525,0.4083,0.1862,0.1613,0.1605,0.6188,5.2,305.8
+KOTA MAKASSAR,0.3088,0.3763,0.2838,0.3429,0.3016,2.2773,-2.3,637.5
